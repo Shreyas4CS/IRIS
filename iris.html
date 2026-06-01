@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IRIS by Cognospace — Learn How Computers See!</title>
+
+<!-- Friendly rounded fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+<!-- TensorFlow.js + MobileNet + KNN Classifier (the real "brain" behind IRIS) -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.6/dist/knn-classifier.min.js"></script>
+
+<style>
+  :root{
+    --coral:#FF6B6B;
+    --sky:#34C6EC;
+    --sun:#FFD23F;
+    --mint:#3DD9A8;
+    --grape:#9B7EF0;
+    --pink:#FF8FCF;
+    --ink:#2B2A4C;
+    --ink-soft:#5b5980;
+    --cream:#FFF9F0;
+    --card:#FFFFFF;
+    --line:#2B2A4C;
+    --shadow: 5px 5px 0 var(--ink);
+    --shadow-sm: 3px 3px 0 var(--ink);
+    --radius: 22px;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:'Nunito',system-ui,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(circle at 12% 18%, rgba(255,210,63,.35), transparent 30%),
+      radial-gradient(circle at 88% 12%, rgba(52,198,236,.30), transparent 32%),
+      radial-gradient(circle at 80% 85%, rgba(255,143,207,.28), transparent 34%),
+      radial-gradient(circle at 15% 90%, rgba(61,217,168,.28), transparent 32%),
+      var(--cream);
+    background-attachment: fixed;
+    min-height:100vh;
+  }
+  h1,h2,h3,h4,.font-head{font-family:'Fredoka',sans-serif;font-weight:600;letter-spacing:.3px;}
+  button{font-family:'Fredoka',sans-serif;cursor:pointer;}
+
+  /* ---------- NAV ---------- */
+  nav{
+    position:sticky;top:0;z-index:50;
+    display:flex;align-items:center;justify-content:space-between;
+    gap:16px;flex-wrap:wrap;
+    padding:14px 26px;
+    background:rgba(255,249,240,.85);
+    backdrop-filter:blur(8px);
+    border-bottom:3px solid var(--ink);
+  }
+  .brand{display:flex;align-items:center;gap:12px;}
+  .iris-mark{
+    width:50px;height:50px;border-radius:50%;
+    border:3px solid var(--ink);
+    background:
+      conic-gradient(from 0deg, var(--coral), var(--sun), var(--mint), var(--sky), var(--grape), var(--pink), var(--coral));
+    display:grid;place-items:center;
+    box-shadow:var(--shadow-sm);
+    flex:none;
+  }
+  .iris-mark .pupil{
+    width:19px;height:19px;border-radius:50%;
+    background:var(--ink);
+    border:3px solid #fff;
+    box-shadow:0 0 0 2px var(--ink);
+  }
+  .brand-title{font-family:'Fredoka';font-size:32px;font-weight:700;color:var(--ink);line-height:1;}
+  .brand-by{font-size:14px;color:var(--ink-soft);font-weight:700;}
+  /* Cognospace logo — moved up beside IRIS, larger & cleaner. Swap the img src to your own file. */
+  .cogno-logo{
+    display:inline-flex;align-items:center;text-decoration:none;color:var(--ink);
+    transition:transform .14s ease;
+  }
+  .cogno-logo:hover{transform:scale(1.06);}
+  .cogno-logo img{height:40px;width:auto;display:block;border-radius:8px;}
+  .cogno-logo .cogno-fallback{
+    font-family:'Fredoka';font-weight:600;font-size:15px;
+    background:var(--sun);border:2px solid var(--ink);border-radius:30px;
+    padding:5px 14px;box-shadow:2px 2px 0 var(--ink);
+  }
+
+  .nav-actions{display:flex;align-items:center;gap:12px;}
+  .pill-stat{
+    font-family:'Fredoka';font-weight:600;font-size:14px;
+    background:#fff;border:2px solid var(--ink);border-radius:30px;
+    padding:8px 14px;box-shadow:2px 2px 0 var(--ink);
+  }
+  .pill-stat b{color:var(--coral);}
+  .btn-end{
+    background:var(--coral);color:#fff;border:3px solid var(--ink);
+    border-radius:30px;padding:10px 18px;font-size:15px;font-weight:600;
+    box-shadow:var(--shadow-sm);transition:transform .12s ease,box-shadow .12s ease;
+  }
+  .btn-end:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink);}
+  .btn-end:active{transform:translate(1px,1px);box-shadow:1px 1px 0 var(--ink);}
+
+  /* ---------- HERO ---------- */
+  header.hero{text-align:center;padding:44px 20px 10px;}
+  header.hero h1{
+    font-size:clamp(34px,6vw,60px);margin:0;line-height:1.02;
+    color:var(--ink);
+    text-shadow:3px 3px 0 #fff, 6px 6px 0 rgba(43,42,76,.12);
+  }
+  header.hero h1 .rainbow{
+    background:linear-gradient(90deg,var(--coral),var(--sun),var(--mint),var(--sky),var(--grape));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  header.hero p{font-size:clamp(15px,2.2vw,20px);color:var(--ink-soft);font-weight:700;max-width:640px;margin:14px auto 0;}
+
+  /* ---------- MODE TABS ---------- */
+  .mode-tabs{display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin:28px auto 8px;padding:0 16px;}
+  .mode-tab{
+    display:flex;align-items:center;gap:12px;
+    background:#fff;border:3px solid var(--ink);border-radius:26px;
+    padding:14px 24px;font-size:18px;font-weight:600;color:var(--ink);
+    box-shadow:var(--shadow);transition:transform .12s ease,box-shadow .12s ease;
+  }
+  .mode-tab .ico{font-size:24px;}
+  .mode-tab:hover{transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink);}
+  .mode-tab.active.train{background:var(--sun);}
+  .mode-tab.active.live{background:var(--mint);}
+
+  main{max-width:1040px;margin:0 auto;padding:24px 18px 60px;}
+  .panel{display:none;animation:pop .35s cubic-bezier(.2,1.3,.4,1);}
+  .panel.show{display:block;}
+  @keyframes pop{from{opacity:0;transform:scale(.96) translateY(10px);}to{opacity:1;transform:none;}}
+
+  .card{
+    background:var(--card);border:3px solid var(--ink);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:26px;margin-top:22px;
+  }
+  .card h2{margin:0 0 6px;font-size:26px;display:flex;align-items:center;gap:10px;}
+  .card .lead{color:var(--ink-soft);font-weight:700;margin:0 0 18px;}
+
+  .action-row{display:flex;gap:16px;flex-wrap:wrap;}
+  .big-btn{
+    flex:1 1 220px;min-height:120px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    border:3px solid var(--ink);border-radius:20px;
+    font-size:20px;font-weight:600;color:var(--ink);
+    box-shadow:var(--shadow);transition:transform .12s ease,box-shadow .12s ease;
+  }
+  .big-btn .emoji{font-size:42px;line-height:1;}
+  .big-btn small{font-weight:700;font-size:13px;color:var(--ink-soft);}
+  .big-btn:hover{transform:translate(-3px,-3px);box-shadow:8px 8px 0 var(--ink);}
+  .big-btn:active{transform:translate(1px,1px);box-shadow:2px 2px 0 var(--ink);}
+  .btn-cam{background:var(--sky);}
+  .btn-up{background:var(--pink);}
+
+  /* camera stage */
+  .stage{margin-top:20px;display:none;text-align:center;}
+  .stage.show{display:block;}
+  .video-wrap{
+    position:relative;display:inline-block;max-width:100%;
+    border:3px solid var(--ink);border-radius:20px;overflow:hidden;
+    box-shadow:var(--shadow);background:#000;
+  }
+  .video-wrap video,.video-wrap canvas,.video-wrap img{display:block;max-width:100%;width:420px;height:auto;}
+  .capture-btn{
+    margin-top:16px;background:var(--coral);color:#fff;border:3px solid var(--ink);
+    border-radius:30px;padding:14px 30px;font-size:18px;font-weight:600;box-shadow:var(--shadow-sm);
+    transition:transform .12s ease,box-shadow .12s ease;
+  }
+  .capture-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink);}
+  .ghost-btn{
+    margin-top:16px;margin-left:8px;background:#fff;color:var(--ink);border:3px solid var(--ink);
+    border-radius:30px;padding:14px 22px;font-size:16px;font-weight:600;box-shadow:var(--shadow-sm);
+  }
+  .ghost-btn:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink);}
+
+  /* ---------- GALLERY ---------- */
+  .gallery-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-top:10px;}
+  .label-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;margin-top:16px;}
+  .label-card{
+    background:var(--cream);border:3px solid var(--ink);border-radius:18px;padding:12px;
+    box-shadow:var(--shadow-sm);text-align:center;position:relative;
+  }
+  .label-card .thumb{width:100%;height:110px;object-fit:cover;border-radius:12px;border:2px solid var(--ink);background:#fff;}
+  .label-card .name{font-family:'Fredoka';font-weight:600;font-size:18px;margin-top:8px;}
+  .label-card .count{font-weight:800;font-size:13px;color:var(--ink-soft);}
+  .label-card .badge{
+    position:absolute;top:-12px;right:-10px;background:var(--sun);border:2px solid var(--ink);
+    border-radius:30px;font-family:'Fredoka';font-weight:600;font-size:12px;padding:3px 9px;box-shadow:2px 2px 0 var(--ink);
+  }
+  .label-card .del{
+    position:absolute;top:-12px;left:-10px;background:var(--coral);color:#fff;border:2px solid var(--ink);
+    width:26px;height:26px;border-radius:50%;font-weight:700;line-height:1;box-shadow:2px 2px 0 var(--ink);
+  }
+  .empty-note{
+    text-align:center;color:var(--ink-soft);font-weight:700;padding:26px;border:3px dashed var(--ink);
+    border-radius:18px;margin-top:16px;background:rgba(255,255,255,.6);
+  }
+
+  /* training progress meter */
+  .train-meter{margin-top:18px;}
+  .train-meter .bar{height:18px;background:#fff;border:3px solid var(--ink);border-radius:30px;overflow:hidden;box-shadow:var(--shadow-sm);}
+  .train-meter .fill{height:100%;width:0;background:linear-gradient(90deg,var(--coral),var(--sun),var(--mint));transition:width .5s ease;}
+  .train-meter .cap{font-weight:800;font-size:13px;color:var(--ink-soft);margin-top:8px;text-align:center;}
+
+  /* ---------- LIVE MODE ---------- */
+  .live-result{
+    margin-top:18px;background:var(--cream);border:3px solid var(--ink);border-radius:18px;
+    padding:18px;box-shadow:var(--shadow-sm);text-align:center;min-height:90px;
+    display:flex;flex-direction:column;justify-content:center;
+  }
+  .live-result .guess{font-family:'Fredoka';font-weight:700;font-size:30px;margin:0;}
+  .live-result .pct{font-weight:800;font-size:16px;color:var(--ink-soft);}
+  .conf-track{height:16px;background:#fff;border:2px solid var(--ink);border-radius:30px;overflow:hidden;margin-top:12px;}
+  .conf-fill{height:100%;width:0;background:linear-gradient(90deg,var(--mint),var(--sky));transition:width .25s ease;}
+  .ranks{margin-top:14px;display:flex;flex-direction:column;gap:8px;text-align:left;}
+  .rank-row{display:flex;align-items:center;gap:10px;font-weight:800;font-size:14px;}
+  .rank-row .rname{width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Fredoka';}
+  .rank-row .rtrack{flex:1;height:12px;background:#fff;border:2px solid var(--ink);border-radius:30px;overflow:hidden;}
+  .rank-row .rfill{height:100%;background:var(--grape);}
+  .rank-row .rpct{width:46px;text-align:right;color:var(--ink-soft);}
+
+  /* live detection overlay (sits on top of the camera feed) */
+  .live-wrap{position:relative;}
+  .live-overlay{position:absolute;inset:0;pointer-events:none;border-radius:17px;overflow:hidden;}
+  .lo-scan{
+    position:absolute;left:0;right:0;height:3px;top:8%;
+    background:linear-gradient(90deg,transparent,var(--mint),var(--sky),transparent);
+    box-shadow:0 0 12px var(--mint);animation:scan 2.6s ease-in-out infinite;opacity:.85;
+  }
+  @keyframes scan{0%{top:8%}50%{top:90%}100%{top:8%}}
+  .lo-corner{position:absolute;width:26px;height:26px;border:3px solid #fff;opacity:.9;}
+  .lo-corner.tl{top:12px;left:12px;border-right:none;border-bottom:none;border-radius:8px 0 0 0;}
+  .lo-corner.tr{top:12px;right:12px;border-left:none;border-bottom:none;border-radius:0 8px 0 0;}
+  .lo-corner.bl{bottom:12px;left:12px;border-right:none;border-top:none;border-radius:0 0 0 8px;}
+  .lo-corner.br{bottom:12px;right:12px;border-left:none;border-top:none;border-radius:0 0 8px 0;}
+  .lo-badge{
+    position:absolute;left:14px;bottom:14px;right:14px;
+    display:flex;align-items:center;gap:10px;
+    background:rgba(43,42,76,.82);color:#fff;border:2px solid #fff;border-radius:16px;
+    padding:9px 14px;backdrop-filter:blur(4px);box-shadow:3px 3px 0 rgba(0,0,0,.3);
+    transition:transform .18s cubic-bezier(.2,1.4,.4,1);
+  }
+  .lo-badge.pulse{transform:scale(1.04);}
+  .lo-emoji{font-size:24px;line-height:1;}
+  .lo-name{font-family:'Fredoka';font-weight:600;font-size:22px;line-height:1;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .lo-pct{
+    font-family:'Fredoka';font-weight:600;font-size:18px;color:var(--ink);
+    background:var(--mint);border:2px solid #fff;border-radius:30px;padding:3px 12px;flex:none;
+  }
+
+  /* ---------- MODAL / STEPS ---------- */
+  .modal-overlay{
+    position:fixed;inset:0;z-index:100;display:none;
+    background:rgba(43,42,76,.55);backdrop-filter:blur(3px);
+    align-items:center;justify-content:center;padding:18px;
+  }
+  .modal-overlay.show{display:flex;animation:fade .25s ease;}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  .modal{
+    width:min(640px,100%);max-height:92vh;overflow:auto;
+    background:var(--cream);border:4px solid var(--ink);border-radius:26px;
+    box-shadow:8px 8px 0 var(--ink);padding:24px;position:relative;
+  }
+  .modal::-webkit-scrollbar{width:12px;}
+  .modal::-webkit-scrollbar-thumb{background:var(--grape);border-radius:30px;border:2px solid var(--ink);}
+  .modal-close{
+    position:absolute;top:14px;right:14px;background:var(--coral);color:#fff;border:3px solid var(--ink);
+    width:38px;height:38px;border-radius:50%;font-size:18px;font-weight:700;box-shadow:2px 2px 0 var(--ink);
+  }
+  .step-progress{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;}
+  .step-dot{
+    flex:1;min-width:30px;height:10px;border-radius:30px;border:2px solid var(--ink);background:#fff;transition:background .3s;
+  }
+  .step-dot.done{background:var(--mint);}
+  .step-dot.current{background:var(--sun);}
+  .step-badge{
+    display:inline-block;background:var(--grape);color:#fff;border:2px solid var(--ink);
+    border-radius:30px;font-family:'Fredoka';font-weight:600;font-size:14px;padding:5px 14px;box-shadow:2px 2px 0 var(--ink);
+  }
+  .modal h3{font-size:26px;margin:10px 0 6px;}
+  .modal p{font-weight:700;color:var(--ink);margin:8px 0;line-height:1.45;}
+  .modal .muted{color:var(--ink-soft);}
+  .step-visual{
+    margin:14px 0;background:#fff;border:3px solid var(--ink);border-radius:18px;padding:16px;
+    box-shadow:var(--shadow-sm);text-align:center;
+  }
+  .step-visual img,.step-visual canvas{max-width:100%;border-radius:12px;border:2px solid var(--ink);}
+  .pixel-grid{display:grid;gap:3px;justify-content:center;font-family:'Fredoka';}
+  .pixel-grid .px{
+    width:30px;height:30px;border-radius:6px;display:grid;place-items:center;
+    font-size:10px;font-weight:600;border:1px solid rgba(43,42,76,.25);
+  }
+  .legend{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-top:12px;font-weight:800;font-size:13px;}
+  .legend span{display:inline-flex;align-items:center;gap:6px;}
+  .legend .sw{width:16px;height:16px;border-radius:4px;border:2px solid var(--ink);}
+  .feat-bars{display:flex;align-items:flex-end;gap:3px;height:90px;justify-content:center;padding-top:6px;}
+  .feat-bars .fb{width:9px;background:linear-gradient(180deg,var(--coral),var(--grape));border-radius:4px 4px 0 0;border:1px solid var(--ink);}
+  .feat-list{text-align:left;display:inline-block;margin:0 auto;font-weight:700;}
+  .feat-list li{margin:5px 0;}
+  .code-num{font-family:'Fredoka';letter-spacing:1px;font-weight:600;color:var(--grape);font-size:15px;word-break:break-word;}
+
+  .name-input{
+    width:100%;font-family:'Fredoka';font-size:22px;font-weight:600;text-align:center;
+    border:3px solid var(--ink);border-radius:16px;padding:14px;margin-top:8px;box-shadow:var(--shadow-sm);
+    background:#fff;color:var(--ink);
+  }
+  .name-input:focus{outline:none;background:#FFFDF5;box-shadow:5px 5px 0 var(--ink);}
+  .quick-names{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-top:12px;}
+  .quick-names button{
+    background:#fff;border:2px solid var(--ink);border-radius:30px;padding:7px 14px;font-weight:600;font-size:14px;
+    box-shadow:2px 2px 0 var(--ink);
+  }
+  .quick-names button:hover{background:var(--sun);}
+
+  .modal-nav{display:flex;justify-content:space-between;gap:12px;margin-top:22px;}
+  .modal-nav button{border:3px solid var(--ink);border-radius:30px;padding:13px 26px;font-size:17px;font-weight:600;box-shadow:var(--shadow-sm);transition:transform .12s ease,box-shadow .12s ease;}
+  .modal-nav button:hover{transform:translate(-2px,-2px);box-shadow:5px 5px 0 var(--ink);}
+  .nav-back{background:#fff;color:var(--ink);}
+  .nav-next{background:var(--sky);color:var(--ink);}
+  .nav-save{background:var(--mint);color:var(--ink);}
+  .nav-next:disabled,.nav-save:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:var(--shadow-sm);}
+
+  /* ---------- TOAST / LOADER ---------- */
+  .toast{
+    position:fixed;left:50%;bottom:30px;transform:translateX(-50%) translateY(120px);
+    background:var(--ink);color:#fff;font-family:'Fredoka';font-weight:600;font-size:16px;
+    padding:14px 24px;border-radius:30px;box-shadow:4px 4px 0 rgba(0,0,0,.25);z-index:200;
+    transition:transform .35s cubic-bezier(.2,1.4,.4,1);border:3px solid #fff;
+  }
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .brain-status{
+    display:inline-flex;align-items:center;gap:8px;font-weight:800;font-size:13px;color:var(--ink-soft);
+    background:#fff;border:2px solid var(--ink);border-radius:30px;padding:6px 12px;box-shadow:2px 2px 0 var(--ink);
+  }
+  .dot-pulse{width:11px;height:11px;border-radius:50%;background:var(--sun);box-shadow:0 0 0 0 rgba(255,210,63,.7);animation:pulse 1.4s infinite;}
+  .dot-pulse.ready{background:var(--mint);animation:none;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,210,63,.7);}70%{box-shadow:0 0 0 10px rgba(255,210,63,0);}100%{box-shadow:0 0 0 0 rgba(255,210,63,0);}}
+
+  .note{font-weight:700;font-size:13px;color:var(--ink-soft);background:rgba(255,255,255,.7);border:2px dashed var(--ink);border-radius:14px;padding:10px 14px;margin-top:16px;}
+
+  /* ---------- FOOTER (minimal) ---------- */
+  footer{margin-top:30px;border-top:3px solid var(--ink);background:rgba(255,255,255,.72);backdrop-filter:blur(6px);}
+  .foot-rainbow{height:5px;width:100%;background:linear-gradient(90deg,var(--coral),var(--sun),var(--mint),var(--sky),var(--grape),var(--pink));}
+  .foot-mini{
+    max-width:1040px;margin:0 auto;padding:14px 22px;
+    display:flex;align-items:center;justify-content:center;gap:8px 14px;flex-wrap:wrap;
+    font-weight:800;font-size:13px;color:var(--ink-soft);text-align:center;
+  }
+  .foot-logo{display:inline-flex;align-items:center;text-decoration:none;transition:transform .14s ease;}
+  .foot-logo:hover{transform:scale(1.06);}
+  .foot-logo img{height:24px;width:auto;display:block;border-radius:6px;}
+  .foot-logo .foot-fallback{font-family:'Fredoka';font-weight:600;font-size:14px;color:var(--ink);}
+  .foot-dot{opacity:.45;}
+  .foot-link{color:var(--coral);text-decoration:none;font-weight:800;}
+  .foot-link:hover{text-decoration:underline;}
+  .heart{color:var(--coral);}
+
+  @media (max-width:560px){
+    .brand-title{font-size:24px;}
+    .cogno-logo img{height:30px;}
+    .iris-mark{width:44px;height:44px;}
+    .iris-mark .pupil{width:16px;height:16px;}
+    .nav-actions{width:100%;justify-content:space-between;}
+    .lo-name{font-size:18px;}
+  }
+</style>
+</head>
+<body>
+
+<!-- ============== NAV ============== -->
+<nav>
+  <div class="brand">
+    <div class="iris-mark" aria-hidden="true"><div class="pupil"></div></div>
+    <span class="brand-title">IRIS</span>
+    <span class="brand-by">by</span>
+    <!-- 🔁 REPLACE the src below with your Cognospace logo. Clicking it opens cognospace.in -->
+    <a class="cogno-logo" href="https://www.cognospace.in" target="_blank" rel="noopener" title="Visit Cognospace">
+      <img src="cognospace-logo.png" alt="Cognospace"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+      <span class="cogno-fallback" style="display:none;">Cognospace</span>
+    </a>
+  </div>
+  <div class="nav-actions">
+    <span class="brain-status"><span id="brainDot" class="dot-pulse"></span><span id="brainText">Waking up IRIS…</span></span>
+    <span class="pill-stat">📚 Trained: <b id="navCount">0</b></span>
+    <button class="btn-end" onclick="endSession()">⏻ End Session</button>
+  </div>
+</nav>
+
+<!-- ============== HERO ============== -->
+<header class="hero">
+  <h1>How do computers <span class="rainbow">see?</span></h1>
+  <p>Teach IRIS to recognise things — just like you do! Snap or upload pictures, watch the magic steps, then test IRIS live. 🎉</p>
+</header>
+
+<!-- ============== MODE TABS ============== -->
+<div class="mode-tabs">
+  <button class="mode-tab train active" id="tabTrain" onclick="setMode('train')">
+    <span class="ico">🎓</span> Training Mode
+  </button>
+  <button class="mode-tab live" id="tabLive" onclick="setMode('live')">
+    <span class="ico">📡</span> Live Mode
+  </button>
+</div>
+
+<main>
+  <!-- ============== TRAINING PANEL ============== -->
+  <section class="panel show" id="panelTrain">
+    <div class="card">
+      <h2>🎓 Training Mode</h2>
+      <p class="lead">Show IRIS a picture and give it a name. The more pictures you teach, the smarter IRIS gets!</p>
+
+      <div class="action-row">
+        <button class="big-btn btn-cam" onclick="startTrainCamera()">
+          <span class="emoji">📷</span> Open Camera
+          <small>Snap a photo right now</small>
+        </button>
+        <button class="big-btn btn-up" onclick="document.getElementById('uploadInput').click()">
+          <span class="emoji">🖼️</span> Upload Image
+          <small>Pick a picture from your device</small>
+        </button>
+        <input type="file" id="uploadInput" accept="image/*" hidden onchange="handleUpload(event)">
+      </div>
+
+      <div class="stage" id="trainStage">
+        <div class="video-wrap">
+          <video id="trainVideo" autoplay playsinline muted></video>
+        </div>
+        <div>
+          <button class="capture-btn" onclick="captureTrainPhoto()">📸 Snap & Learn!</button>
+          <button class="ghost-btn" onclick="stopTrainCamera()">Cancel</button>
+        </div>
+      </div>
+
+      <div class="train-meter">
+        <div class="bar"><div class="fill" id="trainFill"></div></div>
+        <div class="cap" id="trainCap">Teach IRIS at least 2 different things to start! 🌱</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="gallery-head">
+        <h2 style="margin:0;">🗂️ What IRIS Knows</h2>
+        <span class="pill-stat">🧠 Things learned: <b id="labelTotal">0</b></span>
+      </div>
+      <div id="labelGrid" class="label-grid"></div>
+      <div id="emptyGallery" class="empty-note">Nothing learned yet — snap or upload your first picture above! ✨</div>
+    </div>
+  </section>
+
+  <!-- ============== LIVE PANEL ============== -->
+  <section class="panel" id="panelLive">
+    <div class="card">
+      <h2>📡 Live Mode</h2>
+      <p class="lead">Turn on the camera and hold something in front of it. Keep swapping objects — IRIS guesses each one live! For example, hold up a <b>pen</b> and IRIS shows <b>“Pen — 92%”</b> right on the camera. 🎯</p>
+
+      <div style="text-align:center;">
+        <button class="capture-btn" id="liveToggle" onclick="toggleLiveCamera()">🎥 Open Camera</button>
+      </div>
+
+      <div class="stage" id="liveStage" style="margin-top:18px;">
+        <div class="video-wrap live-wrap">
+          <video id="liveVideo" autoplay playsinline muted></video>
+          <div class="live-overlay" id="liveOverlay">
+            <span class="lo-corner tl"></span><span class="lo-corner tr"></span>
+            <span class="lo-corner bl"></span><span class="lo-corner br"></span>
+            <div class="lo-scan"></div>
+            <div class="lo-badge" id="loBadge">
+              <span class="lo-emoji" id="loEmoji">🔎</span>
+              <span class="lo-name" id="loName">Looking…</span>
+              <span class="lo-pct" id="loPct" style="display:none;">0%</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="live-result" id="liveResult">
+        <p class="guess" id="liveGuess">Press “Open Camera”, then show IRIS an object 🔍</p>
+        <span class="pct" id="livePct"></span>
+        <div class="conf-track"><div class="conf-fill" id="confFill"></div></div>
+        <div class="ranks" id="liveRanks"></div>
+      </div>
+
+      <div class="note" id="liveNote">💡 Tip: Teach IRIS a few pictures of each thing in Training Mode first. The more you train, the more confident IRIS becomes!</div>
+    </div>
+  </section>
+
+  <div class="note">
+    🔒 Everything happens privately inside this page on your own device — no photos are uploaded to the internet.
+    📷 The camera needs the page to be opened over <b>https://</b> or <b>localhost</b> (it may not work from a plain file). Uploading pictures always works!
+  </div>
+</main>
+
+<!-- ============== STEPS MODAL ============== -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <div class="step-progress" id="stepProgress"></div>
+    <div id="stepContent"></div>
+    <div class="modal-nav">
+      <button class="nav-back" id="btnBack" onclick="prevStep()">← Back</button>
+      <button class="nav-next" id="btnNext" onclick="nextStep()">Next →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============== FOOTER (minimal) ============== -->
+<footer>
+  <div class="foot-rainbow"></div>
+  <div class="foot-mini">
+    <a class="foot-logo" href="https://www.cognospace.in" target="_blank" rel="noopener" title="Visit Cognospace">
+      <img src="cognospace-logo.png" alt="Cognospace"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline-flex';">
+      <span class="foot-fallback" style="display:none;">Cognospace</span>
+    </a>
+    <span class="foot-dot">•</span>
+    <span>© <span id="year"></span> IRIS by Cognospace</span>
+    <span class="foot-dot">•</span>
+    <span>Made with <span class="heart">♥</span> for curious minds</span>
+    <span class="foot-dot">•</span>
+    <a class="foot-link" href="https://www.cognospace.in" target="_blank" rel="noopener">cognospace.in ↗</a>
+  </div>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   IRIS by Cognospace — in-browser computer vision for kids
+   Tech: MobileNet (feature extraction) + KNN classifier.
+   Persistence: localStorage so a refresh keeps IRIS's brain.
+   ========================================================= */
+
+const STORE_KEY = 'iris_cognospace_brain_v1';
+
+let mobilenetModel = null;
+let classifier = null;
+let modelReady = false;
+
+let state = {
+  labels: [],     // ["Cat","Dog",...]
+  counts: {},     // {"Cat":3,...}
+  thumbs: {}      // {"Cat":"data:image/..."}  (one preview per label)
+};
+
+let pendingCapture = null;   // { dataURL, embedding(set at step5) }
+let currentStep = 0;
+const TOTAL_STEPS = 6;
+
+let trainStream = null;
+let liveStream = null;
+let liveLoopId = null;
+
+/* ---------- boot ---------- */
+document.getElementById('year').textContent = new Date().getFullYear();
+window.addEventListener('load', initBrain);
+window.addEventListener('beforeunload', () => { stopTrainCamera(); stopLiveCamera(); });
+
+async function initBrain(){
+  classifier = knnClassifier.create();
+  loadFromStorage();
+  renderGallery();
+  try{
+    mobilenetModel = await mobilenet.load({version:2, alpha:1.0});
+    modelReady = true;
+    document.getElementById('brainDot').classList.add('ready');
+    document.getElementById('brainText').textContent = "IRIS is ready!";
+  }catch(e){
+    document.getElementById('brainText').textContent = "Brain offline (need internet)";
+    console.error(e);
+  }
+}
+
+/* ---------- storage ---------- */
+function saveToStorage(){
+  try{
+    const ds = classifier.getClassifierDataset();
+    const dataset = {};
+    Object.keys(ds).forEach(k=>{
+      dataset[k] = { data: Array.from(ds[k].dataSync()), shape: ds[k].shape };
+    });
+    const payload = { dataset, labels: state.labels, counts: state.counts, thumbs: state.thumbs };
+    localStorage.setItem(STORE_KEY, JSON.stringify(payload));
+  }catch(e){ console.warn('Could not save brain', e); }
+}
+
+function loadFromStorage(){
+  const raw = localStorage.getItem(STORE_KEY);
+  if(!raw) return;
+  try{
+    const payload = JSON.parse(raw);
+    state.labels = payload.labels || [];
+    state.counts = payload.counts || {};
+    state.thumbs = payload.thumbs || {};
+    if(payload.dataset && Object.keys(payload.dataset).length){
+      const tensors = {};
+      Object.keys(payload.dataset).forEach(k=>{
+        tensors[k] = tf.tensor(payload.dataset[k].data, payload.dataset[k].shape);
+      });
+      classifier.setClassifierDataset(tensors);
+    }
+  }catch(e){ console.warn('Could not load brain', e); }
+}
+
+/* ---------- mode switching ---------- */
+function setMode(mode){
+  const train = mode==='train';
+  document.getElementById('panelTrain').classList.toggle('show', train);
+  document.getElementById('panelLive').classList.toggle('show', !train);
+  document.getElementById('tabTrain').classList.toggle('active', train);
+  document.getElementById('tabLive').classList.toggle('active', !train);
+  if(train){ stopLiveCamera(); }
+  else { stopTrainCamera(); refreshLiveNote(); }
+}
+
+/* ---------- TRAINING: camera ---------- */
+async function startTrainCamera(){
+  try{
+    trainStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
+    const v = document.getElementById('trainVideo');
+    v.srcObject = trainStream;
+    document.getElementById('trainStage').classList.add('show');
+  }catch(e){
+    toast('📷 Camera blocked — try Upload Image instead!');
+  }
+}
+function stopTrainCamera(){
+  if(trainStream){ trainStream.getTracks().forEach(t=>t.stop()); trainStream=null; }
+  document.getElementById('trainStage').classList.remove('show');
+}
+function captureTrainPhoto(){
+  const v = document.getElementById('trainVideo');
+  if(!v.videoWidth){ toast('Camera still warming up… 🔄'); return; }
+  const c = document.createElement('canvas');
+  const size = Math.min(v.videoWidth, v.videoHeight);
+  c.width = 320; c.height = 320;
+  const sx=(v.videoWidth-size)/2, sy=(v.videoHeight-size)/2;
+  c.getContext('2d').drawImage(v, sx, sy, size, size, 0,0,320,320);
+  stopTrainCamera();
+  beginSteps(c.toDataURL('image/jpeg', .85));
+}
+
+/* ---------- TRAINING: upload ---------- */
+function handleUpload(ev){
+  const file = ev.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const img = new Image();
+    img.onload = ()=>{
+      const c = document.createElement('canvas');
+      const size = Math.min(img.width, img.height);
+      c.width=320; c.height=320;
+      const sx=(img.width-size)/2, sy=(img.height-size)/2;
+      c.getContext('2d').drawImage(img, sx, sy, size, size, 0,0,320,320);
+      beginSteps(c.toDataURL('image/jpeg', .85));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+  ev.target.value = '';
+}
+
+/* =========================================================
+   THE 6 STEPS POP-UP
+   ========================================================= */
+function beginSteps(dataURL){
+  pendingCapture = { dataURL, embedding:null, name:'' };
+  currentStep = 0;
+  document.getElementById('modal').classList.add('show');
+  renderStep();
+}
+function closeModal(){
+  document.getElementById('modal').classList.remove('show');
+  pendingCapture = null;
+}
+function renderProgress(){
+  const wrap = document.getElementById('stepProgress');
+  wrap.innerHTML='';
+  for(let i=0;i<TOTAL_STEPS;i++){
+    const d=document.createElement('div');
+    d.className='step-dot'+(i<currentStep?' done':'')+(i===currentStep?' current':'');
+    wrap.appendChild(d);
+  }
+}
+function nextStep(){ if(currentStep<TOTAL_STEPS-1){ currentStep++; renderStep(); } }
+function prevStep(){ if(currentStep>0){ currentStep--; renderStep(); } }
+
+function renderStep(){
+  renderProgress();
+  const c = document.getElementById('stepContent');
+  const back = document.getElementById('btnBack');
+  const next = document.getElementById('btnNext');
+  back.style.visibility = currentStep===0 ? 'hidden' : 'visible';
+
+  // reset next button to default
+  next.className='nav-next'; next.textContent='Next →'; next.disabled=false; next.onclick=nextStep;
+
+  switch(currentStep){
+    case 0: stepCapture(c); break;
+    case 1: stepNumbers(c); break;
+    case 2: stepPreprocess(c); break;
+    case 3: stepFeatures(c); break;
+    case 4: stepExtract(c); break;
+    case 5: stepName(c); break;
+  }
+}
+
+/* Step 1 — Image Capture */
+function stepCapture(c){
+  c.innerHTML = `
+    <span class="step-badge">Step 1 of 6</span>
+    <h3>📷 Image Capture</h3>
+    <p>A camera captured this picture! Look closely — every photo is built from millions of tiny coloured dots called <b style="color:var(--grape)">pixels</b>.</p>
+    <div class="step-visual"><img src="${pendingCapture.dataURL}" width="240" alt="your picture"></div>
+    <p class="muted">This is the picture IRIS is about to learn from. 👀</p>`;
+}
+
+/* Step 2 — Convert Image into Numbers */
+function stepNumbers(c){
+  c.innerHTML = `
+    <span class="step-badge">Step 2 of 6</span>
+    <h3>🔢 Turn Picture into Numbers</h3>
+    <p>Computers don't see pictures — they see <b>numbers</b>! Each pixel becomes a brightness value from <b>0</b> (black) to <b>255</b> (white).</p>
+    <div class="step-visual">
+      <div class="pixel-grid" id="pixelGrid"></div>
+      <div class="legend">
+        <span><span class="sw" style="background:#000"></span> 0 = black</span>
+        <span><span class="sw" style="background:#fff"></span> 255 = white</span>
+      </div>
+      <p class="muted" style="margin-top:12px;">Colour pixels store <b>three</b> numbers — Red, Green &amp; Blue. For example <span class="code-num">(255, 0, 0)</span> means pure red! 🟥</p>
+    </div>`;
+  drawPixelGrid(8);
+}
+function drawPixelGrid(n){
+  const img = new Image();
+  img.onload = ()=>{
+    const cv=document.createElement('canvas'); cv.width=n; cv.height=n;
+    const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,n,n);
+    const data=ctx.getImageData(0,0,n,n).data;
+    const grid=document.getElementById('pixelGrid');
+    if(!grid) return;
+    grid.style.gridTemplateColumns=`repeat(${n},30px)`;
+    grid.innerHTML='';
+    for(let i=0;i<n*n;i++){
+      const r=data[i*4],g=data[i*4+1],b=data[i*4+2];
+      const lum=Math.round(0.299*r+0.587*g+0.114*b);
+      const cell=document.createElement('div');
+      cell.className='px';
+      cell.style.background=`rgb(${lum},${lum},${lum})`;
+      cell.style.color = lum>140?'#2B2A4C':'#fff';
+      cell.textContent=lum;
+      grid.appendChild(cell);
+    }
+  };
+  img.src=pendingCapture.dataURL;
+}
+
+/* Step 3 — Preprocessing */
+function stepPreprocess(c){
+  c.innerHTML = `
+    <span class="step-badge">Step 3 of 6</span>
+    <h3>🧼 Preprocessing (Cleaning)</h3>
+    <p>Before understanding the picture, IRIS tidies it up — like resizing, removing noise, fixing brightness and turning it <b>grayscale</b>. A clean picture is easier to understand!</p>
+    <div class="step-visual">
+      <div style="display:flex;gap:14px;justify-content:center;align-items:center;flex-wrap:wrap;">
+        <div><div style="font-weight:800;font-size:12px;margin-bottom:6px;color:var(--ink-soft)">Original</div>
+          <img src="${pendingCapture.dataURL}" width="130"></div>
+        <div style="font-size:28px">➡️</div>
+        <div><div style="font-weight:800;font-size:12px;margin-bottom:6px;color:var(--ink-soft)">Cleaned</div>
+          <canvas id="grayCanvas" width="130" height="130"></canvas></div>
+      </div>
+      <p class="muted" style="margin-top:12px;">This helps IRIS work faster and more accurately. ⚡</p>
+    </div>`;
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.getElementById('grayCanvas'); if(!cv)return;
+    const ctx=cv.getContext('2d'); ctx.drawImage(img,0,0,130,130);
+    const d=ctx.getImageData(0,0,130,130); const px=d.data;
+    for(let i=0;i<px.length;i+=4){
+      let lum=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+      lum=Math.min(255,(lum-128)*1.15+128); // little brightness/contrast tidy
+      px[i]=px[i+1]=px[i+2]=lum;
+    }
+    ctx.putImageData(d,0,0);
+  };
+  img.src=pendingCapture.dataURL;
+}
+
+/* Step 4 — Feature Detection (edges) */
+function stepFeatures(c){
+  c.innerHTML = `
+    <span class="step-badge">Step 4 of 6</span>
+    <h3>🔍 Feature Detection</h3>
+    <p>Now IRIS hunts for important <b>patterns</b>: <b>edges</b> (where colours suddenly change), <b>corners</b>, <b>shapes</b> and <b>colours</b>.</p>
+    <div class="step-visual">
+      <div style="font-weight:800;font-size:12px;margin-bottom:6px;color:var(--ink-soft)">Edges IRIS found 👇</div>
+      <canvas id="edgeCanvas" width="200" height="200"></canvas>
+      <div class="legend">
+        <span>🔺 Shapes</span><span>📐 Corners</span><span>🌈 Colours</span><span>➰ Edges</span>
+      </div>
+      <p class="muted" style="margin-top:10px;">These clues help IRIS tell objects apart!</p>
+    </div>`;
+  const img=new Image();
+  img.onload=()=>{
+    const cv=document.getElementById('edgeCanvas'); if(!cv)return;
+    const W=200,H=200, ctx=cv.getContext('2d');
+    ctx.drawImage(img,0,0,W,H);
+    const src=ctx.getImageData(0,0,W,H).data;
+    const gray=new Float32Array(W*H);
+    for(let i=0;i<W*H;i++) gray[i]=0.299*src[i*4]+0.587*src[i*4+1]+0.114*src[i*4+2];
+    const out=ctx.createImageData(W,H);
+    for(let y=1;y<H-1;y++){
+      for(let x=1;x<W-1;x++){
+        const i=y*W+x;
+        const gx=(gray[i-W+1]+2*gray[i+1]+gray[i+W+1])-(gray[i-W-1]+2*gray[i-1]+gray[i+W-1]);
+        const gy=(gray[i+W-1]+2*gray[i+W]+gray[i+W+1])-(gray[i-W-1]+2*gray[i-W]+gray[i-W+1]);
+        let m=Math.sqrt(gx*gx+gy*gy); m=m>90?255:Math.max(0,m*0.5);
+        const o=i*4; const v=255-m;
+        out.data[o]=v; out.data[o+1]=v; out.data[o+2]=v; out.data[o+3]=255;
+      }
+    }
+    ctx.putImageData(out,0,0);
+  };
+  img.src=pendingCapture.dataURL;
+}
+
+/* Step 5 — Feature Extraction (real MobileNet embedding) */
+function stepExtract(c){
+  c.innerHTML = `
+    <span class="step-badge">Step 5 of 6</span>
+    <h3>🧠 Feature Extraction</h3>
+    <p>IRIS collects all the useful clues and turns them into a list of <b>numbers</b> — its own secret "fingerprint" for this picture. (For a cat that might be: two pointed ears 🐱, two eyes, a nose, fur texture.)</p>
+    <div class="step-visual">
+      <div class="feat-bars" id="featBars"></div>
+      <p class="muted" id="extractMsg" style="margin-top:10px;">Thinking… 🤔</p>
+    </div>
+    <ul class="feat-list muted">
+      <li>👂 Edges &amp; shapes</li><li>🎨 Colours</li><li>📐 Corners</li><li>🧶 Textures</li>
+    </ul>`;
+  // animated placeholder bars
+  const bars=document.getElementById('featBars');
+  let anim=[];
+  for(let i=0;i<28;i++){const b=document.createElement('div');b.className='fb';b.style.height='10%';bars.appendChild(b);anim.push(b);}
+  const wob=setInterval(()=>anim.forEach(b=>b.style.height=(10+Math.random()*80)+'%'),180);
+
+  document.getElementById('btnNext').disabled = true; // can't continue until features ready
+
+  computeEmbedding().then(values=>{
+    clearInterval(wob);
+    if(values){
+      anim.forEach((b,i)=> b.style.height = (8 + Math.min(100, Math.abs(values[i]||0)*16)) + '%');
+      document.getElementById('extractMsg').innerHTML='Done! IRIS stored this as a mathematical pattern. ✅';
+    }else{
+      document.getElementById('extractMsg').innerHTML='⚠️ The IRIS brain needs internet to load. Reconnect and try again.';
+    }
+    document.getElementById('btnNext').disabled = !values;
+  });
+}
+async function computeEmbedding(){
+  if(pendingCapture.embedding) return pendingCapture.embedding.slice(0,28);
+  if(!modelReady){ // wait briefly for model
+    let waited=0; while(!modelReady && waited<8000){ await new Promise(r=>setTimeout(r,250)); waited+=250; }
+  }
+  if(!modelReady) return null;
+  const img=new Image();
+  await new Promise(res=>{img.onload=res; img.src=pendingCapture.dataURL;});
+  const t=tf.browser.fromPixels(img);
+  const logits=mobilenetModel.infer(t, true); // embedding
+  const arr=Array.from(await logits.data());
+  pendingCapture._embeddingTensor = logits; // keep tensor for addExample
+  t.dispose();
+  pendingCapture.embedding = arr;
+  return arr.slice(0,28);
+}
+
+/* Step 6 — Name it & Save */
+function stepName(c){
+  const existing = state.labels;
+  c.innerHTML = `
+    <span class="step-badge">Step 6 of 6</span>
+    <h3>🏷️ Name This Picture!</h3>
+    <p>What is it? Type a name so IRIS remembers. Teaching <b>more pictures</b> of the same thing makes IRIS <b>way more accurate</b>! 🚀</p>
+    <div class="step-visual" style="padding:12px;">
+      <img src="${pendingCapture.dataURL}" width="120">
+      <input class="name-input" id="nameInput" placeholder="e.g. Cat, Apple, My Toy…" maxlength="24"
+             value="${pendingCapture.name||''}" oninput="syncName()">
+      <div class="quick-names" id="quickNames"></div>
+    </div>`;
+  const q=document.getElementById('quickNames');
+  existing.slice(0,8).forEach(n=>{
+    const b=document.createElement('button');
+    b.textContent='+ '+n;
+    b.onclick=()=>{document.getElementById('nameInput').value=n; syncName();};
+    q.appendChild(b);
+  });
+
+  const next=document.getElementById('btnNext');
+  next.className='nav-save'; next.textContent='💾 Teach IRIS!';
+  next.onclick=saveExample;
+  next.disabled = !(pendingCapture.name && pendingCapture.name.trim());
+  setTimeout(()=>{const el=document.getElementById('nameInput'); if(el) el.focus();},80);
+}
+function syncName(){
+  const v=document.getElementById('nameInput').value;
+  pendingCapture.name=v;
+  document.getElementById('btnNext').disabled = !(v && v.trim());
+}
+
+async function saveExample(){
+  const name=(pendingCapture.name||'').trim();
+  if(!name){ return; }
+  if(!pendingCapture.embedding && !pendingCapture._embeddingTensor){
+    toast('IRIS is still thinking — go back to Step 5 🤔'); return;
+  }
+  // label index
+  let idx=state.labels.indexOf(name);
+  if(idx===-1){ state.labels.push(name); idx=state.labels.length-1; }
+
+  // add example to classifier
+  const tensor = pendingCapture._embeddingTensor || tf.tensor(pendingCapture.embedding,[1,pendingCapture.embedding.length]);
+  classifier.addExample(tensor, idx);
+  // (don't dispose embedding tensor we created from infer; KNN copies data)
+
+  state.counts[name]=(state.counts[name]||0)+1;
+  // keep a small thumbnail as the label preview
+  state.thumbs[name]=makeThumb(pendingCapture.dataURL, 96);
+
+  saveToStorage();
+  renderGallery();
+  closeModal();
+  toast(`🎉 IRIS learned "${name}"! (${state.counts[name]} picture${state.counts[name]>1?'s':''})`);
+}
+function makeThumb(dataURL,size){
+  const c=document.createElement('canvas');c.width=size;c.height=size;
+  const img=new Image(); // synchronous-ish via existing decoded data — draw immediately if possible
+  // Note: dataURL already decoded for the photo; quick redraw
+  const ctx=c.getContext('2d');
+  // We can't guarantee sync decode, so just store the original (already small 320px). Keep it simple:
+  return dataURL;
+}
+
+/* ---------- GALLERY ---------- */
+function renderGallery(){
+  const grid=document.getElementById('labelGrid');
+  const empty=document.getElementById('emptyGallery');
+  grid.innerHTML='';
+  const labels=state.labels.filter(l=>(state.counts[l]||0)>0);
+  if(labels.length===0){ empty.style.display='block'; }
+  else { empty.style.display='none'; }
+
+  labels.forEach(name=>{
+    const card=document.createElement('div'); card.className='label-card';
+    card.innerHTML=`
+      <button class="del" title="Forget this" onclick="forgetLabel('${escapeJs(name)}')">✕</button>
+      <span class="badge">${state.counts[name]} pic${state.counts[name]>1?'s':''}</span>
+      <img class="thumb" src="${state.thumbs[name]||''}" alt="${name}">
+      <div class="name">${escapeHtml(name)}</div>
+      <div class="count">IRIS knows this!</div>`;
+    grid.appendChild(card);
+  });
+
+  const total=labels.length;
+  const totalPics=labels.reduce((s,l)=>s+(state.counts[l]||0),0);
+  document.getElementById('labelTotal').textContent=total;
+  document.getElementById('navCount').textContent=totalPics;
+
+  // training meter: encourage 2+ labels and ~5 pics each
+  const goal = Math.max(2,total)*5;
+  const pct = Math.min(100, Math.round((totalPics/goal)*100));
+  document.getElementById('trainFill').style.width=pct+'%';
+  const cap=document.getElementById('trainCap');
+  if(total===0) cap.textContent='Teach IRIS at least 2 different things to start! 🌱';
+  else if(total===1) cap.textContent='Great start! Now teach a different thing too. 🌿';
+  else cap.textContent=`IRIS knows ${total} things from ${totalPics} pictures — keep going to boost accuracy! 🌳 (${pct}%)`;
+
+  refreshLiveNote();
+}
+function forgetLabel(name){
+  if(!confirm(`Make IRIS forget "${name}"?`)) return;
+  const idx=state.labels.indexOf(name);
+  if(idx>-1){
+    try{ classifier.clearClass(idx); }catch(e){}
+  }
+  delete state.counts[name];
+  delete state.thumbs[name];
+  // NOTE: we keep label index slot to stay aligned with KNN; mark as empty
+  state.counts[name]=0;
+  saveToStorage();
+  renderGallery();
+  toast(`IRIS forgot "${name}".`);
+}
+
+/* ---------- LIVE MODE ---------- */
+function refreshLiveNote(){
+  const active=state.labels.filter(l=>(state.counts[l]||0)>0);
+  const note=document.getElementById('liveNote');
+  if(active.length<2){
+    note.innerHTML='👉 Teach IRIS at least <b>2 different things</b> in Training Mode first, then come back here!';
+  }else{
+    note.innerHTML='💡 The more pictures you teach per thing, the more confident IRIS becomes!';
+  }
+}
+async function toggleLiveCamera(){
+  if(liveStream){ stopLiveCamera(); return; }
+  const active=state.labels.filter(l=>(state.counts[l]||0)>0);
+  if(active.length<2){ toast('Teach IRIS 2+ things first! 🎓'); setMode('train'); return; }
+  try{
+    liveStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    const v=document.getElementById('liveVideo'); v.srcObject=liveStream;
+    document.getElementById('liveStage').classList.add('show');
+    document.getElementById('liveToggle').textContent='🛑 Close Camera';
+    document.getElementById('liveGuess').textContent='Show IRIS an object… 🔎';
+    setOverlay('🔎','Looking…',null);
+    liveLoop();
+  }catch(e){ toast('📷 Could not open camera. Allow camera access and try again.'); }
+}
+function stopLiveCamera(){
+  if(liveLoopId){ cancelAnimationFrame(liveLoopId); liveLoopId=null; }
+  if(liveStream){ liveStream.getTracks().forEach(t=>t.stop()); liveStream=null; }
+  document.getElementById('liveStage').classList.remove('show');
+  const tg=document.getElementById('liveToggle'); if(tg) tg.textContent='🎥 Open Camera';
+}
+let liveBusy=false, lastPredict=0;
+async function liveLoop(){
+  liveLoopId=requestAnimationFrame(liveLoop);
+  const now=performance.now();
+  if(liveBusy || now-lastPredict<450 || !modelReady) return;
+  lastPredict=now; liveBusy=true;
+  try{
+    const v=document.getElementById('liveVideo');
+    if(!v.videoWidth){ liveBusy=false; return; }
+    const t=tf.browser.fromPixels(v);
+    const emb=mobilenetModel.infer(t,true);
+    const res=await classifier.predictClass(emb, 5);
+    t.dispose(); emb.dispose();
+    showPrediction(res);
+  }catch(e){ /* ignore frame */ }
+  liveBusy=false;
+}
+function emojiFor(name){
+  const n=(name||'').toLowerCase();
+  const map={pen:'✏️',pencil:'✏️',marker:'🖊️',book:'📕',cat:'🐱',dog:'🐶',apple:'🍎',
+    banana:'🍌',ball:'⚽',car:'🚗',cup:'🥤',bottle:'🍼',phone:'📱',hand:'✋',
+    flower:'🌸',key:'🔑',watch:'⌚',glasses:'👓',shoe:'👟',toy:'🧸',box:'📦',
+    whiteboard:'📋',board:'📋',scissors:'✂️',clock:'🕐'};
+  for(const k in map){ if(n.includes(k)) return map[k]; }
+  return '🎯';
+}
+let _lastOverlayName=null;
+function setOverlay(emoji,name,pct){
+  const eEl=document.getElementById('loEmoji');
+  const nEl=document.getElementById('loName');
+  const pEl=document.getElementById('loPct');
+  const badge=document.getElementById('loBadge');
+  if(!nEl) return;
+  eEl.textContent=emoji;
+  nEl.textContent=name;
+  if(pct===null){ pEl.style.display='none'; }
+  else{ pEl.style.display='inline-block'; pEl.textContent=pct+'%'; }
+  if(name!==_lastOverlayName){ // little pulse when the guess changes
+    badge.classList.add('pulse');
+    setTimeout(()=>badge.classList.remove('pulse'),200);
+    _lastOverlayName=name;
+  }
+}
+function showPrediction(res){
+  const name=state.labels[Number(res.label)] || '???';
+  const conf=Math.round((res.confidences[res.label]||0)*100);
+
+  // on-camera overlay (looks like a live detector)
+  setOverlay(emojiFor(name), name, conf);
+
+  document.getElementById('liveGuess').textContent=`I think it's a ${name}! 🎯`;
+  document.getElementById('livePct').textContent=`I'm ${conf}% sure`;
+  document.getElementById('confFill').style.width=conf+'%';
+
+  // ranked list
+  const ranks=document.getElementById('liveRanks'); ranks.innerHTML='';
+  const entries=Object.keys(res.confidences)
+    .map(k=>({name:state.labels[Number(k)], pct:Math.round(res.confidences[k]*100)}))
+    .filter(e=>e.name)
+    .sort((a,b)=>b.pct-a.pct);
+  entries.forEach(e=>{
+    const row=document.createElement('div'); row.className='rank-row';
+    row.innerHTML=`<span class="rname">${escapeHtml(e.name)}</span>
+      <span class="rtrack"><span class="rfill" style="width:${e.pct}%"></span></span>
+      <span class="rpct">${e.pct}%</span>`;
+    ranks.appendChild(row);
+  });
+}
+
+/* ---------- END SESSION ---------- */
+function endSession(){
+  if(!confirm('End session and erase everything IRIS has learned? This cannot be undone.')) return;
+  localStorage.removeItem(STORE_KEY);
+  stopTrainCamera(); stopLiveCamera();
+  try{ classifier.clearAllClasses(); }catch(e){}
+  classifier = knnClassifier.create();
+  state={labels:[],counts:{},thumbs:{}};
+  renderGallery();
+  document.getElementById('liveGuess').textContent='Press “Open Camera”, then show IRIS an object 🔍';
+  document.getElementById('livePct').textContent='';
+  document.getElementById('confFill').style.width='0%';
+  document.getElementById('liveRanks').innerHTML='';
+  setOverlay('🔎','Looking…',null); _lastOverlayName=null;
+  setMode('train');
+  toast('🧹 Session ended — IRIS forgot everything. Fresh start!');
+}
+
+/* ---------- helpers ---------- */
+function toast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer=setTimeout(()=>t.classList.remove('show'),2600);
+}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function escapeJs(s){return String(s).replace(/['\\]/g,'\\$&');}
+</script>
+</body>
+</html>
