@@ -415,7 +415,7 @@
   <section class="panel show" id="panelTrain">
     <div class="card">
       <h2>🎓 Training Mode</h2>
-      <p class="lead">Show IRIS a picture and give it a name. IRIS automatically studies each photo from many angles, so just 1–2 photos of each thing is enough!</p>
+      <p class="lead">Show IRIS a picture and give it a name. The more pictures you teach, the smarter IRIS gets!</p>
 
       <div class="action-row">
         <button class="big-btn btn-cam" onclick="startTrainCamera()">
@@ -435,7 +435,6 @@
         </div>
         <div>
           <button class="capture-btn" onclick="captureTrainPhoto()">📸 Snap & Learn!</button>
-          <button class="ghost-btn" onclick="switchTrainCamera()">🔄 Switch Camera</button>
           <button class="ghost-btn" onclick="stopTrainCamera()">Cancel</button>
         </div>
       </div>
@@ -464,7 +463,6 @@
 
       <div style="text-align:center;">
         <button class="capture-btn" id="liveToggle" onclick="toggleLiveCamera()">🎥 Open Camera</button>
-        <button class="ghost-btn" id="liveSwitch" onclick="switchLiveCamera()" style="display:none;">🔄 Switch Camera</button>
       </div>
 
       <div class="stage" id="liveStage" style="margin-top:18px;">
@@ -493,6 +491,11 @@
       <div class="note" id="liveNote">💡 Tip: Teach IRIS a few pictures of each thing in Training Mode first. The more you train, the more confident IRIS becomes!</div>
     </div>
   </section>
+
+  <div class="note">
+    🔒 Everything happens privately inside this page on your own device — no photos are uploaded to the internet.
+    📷 The camera needs the page to be opened over <b>https://</b> or <b>localhost</b> (it may not work from a plain file). Uploading pictures always works!
+  </div>
 </main>
 
 <!-- ============== STEPS MODAL ============== -->
@@ -553,8 +556,6 @@ const TOTAL_STEPS = 6;
 
 let trainStream = null;
 let liveStream = null;
-let trainFacing = 'environment';   // 'environment' = rear, 'user' = front
-let liveFacing = 'environment';
 let liveLoopId = null;
 
 /* ---------- boot ---------- */
@@ -622,21 +623,12 @@ function setMode(mode){
 /* ---------- TRAINING: camera ---------- */
 async function startTrainCamera(){
   try{
-    if(trainStream){ trainStream.getTracks().forEach(t=>t.stop()); trainStream=null; }
-    trainStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:trainFacing}}});
+    trainStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}});
     const v = document.getElementById('trainVideo');
     v.srcObject = trainStream;
-    v.style.transform = (trainFacing==='user') ? 'scaleX(-1)' : 'none'; // natural selfie view
     document.getElementById('trainStage').classList.add('show');
   }catch(e){
     toast('📷 Camera blocked — try Upload Image instead!');
-  }
-}
-async function switchTrainCamera(){
-  trainFacing = (trainFacing==='environment') ? 'user' : 'environment';
-  if(trainStream){
-    await startTrainCamera();
-    toast(trainFacing==='user' ? '🤳 Front camera' : '📷 Rear camera');
   }
 }
 function stopTrainCamera(){
@@ -895,7 +887,7 @@ function stepName(c){
   c.innerHTML = `
     <span class="step-badge">Step 6 of 6</span>
     <h3>🏷️ Name This Picture!</h3>
-    <p>What is it? Type a name so IRIS remembers. IRIS will automatically learn this from many angles — even upside-down — so you don't need many photos! 🚀</p>
+    <p>What is it? Type a name so IRIS remembers. Teaching <b>more pictures</b> of the same thing makes IRIS <b>way more accurate</b>! 🚀</p>
     <div class="step-visual" style="padding:12px;">
       <img src="${pendingCapture.dataURL}" width="120">
       <input class="name-input" id="nameInput" placeholder="e.g. Cat, Apple, My Toy…" maxlength="24"
@@ -922,58 +914,6 @@ function syncName(){
   document.getElementById('btnNext').disabled = !(v && v.trim());
 }
 
-/* ---------- DATA AUGMENTATION ----------
-   One real photo → many learning examples (mirror, rotations incl. upside-down,
-   brightness, zoom). This makes IRIS accurate from FAR FEWER photos, and helps
-   it recognise objects even when they're inverted. */
-function drawVariant(img, kind){
-  const S=224;
-  const c=document.createElement('canvas'); c.width=S; c.height=S;
-  const ctx=c.getContext('2d');
-  ctx.save();
-  ctx.translate(S/2,S/2);
-  switch(kind){
-    case 'flip':    ctx.scale(-1,1); break;
-    case 'rot180':  ctx.rotate(Math.PI); break;             // upside-down
-    case 'rotL':    ctx.rotate(-12*Math.PI/180); break;
-    case 'rotR':    ctx.rotate( 12*Math.PI/180); break;
-    case 'flip180': ctx.scale(-1,1); ctx.rotate(Math.PI); break;
-    case 'zoom':    ctx.scale(1.2,1.2); break;
-    default: break; // 'orig','bright','dark' draw centred with no transform
-  }
-  ctx.drawImage(img,-S/2,-S/2,S,S);
-  ctx.restore();
-  if(kind==='bright'||kind==='dark'){
-    const d=ctx.getImageData(0,0,S,S); const p=d.data;
-    const f = kind==='bright' ? 1.18 : 0.82;
-    for(let i=0;i<p.length;i+=4){
-      p[i]=Math.min(255,p[i]*f); p[i+1]=Math.min(255,p[i+1]*f); p[i+2]=Math.min(255,p[i+2]*f);
-    }
-    ctx.putImageData(d,0,0);
-  }
-  return c;
-}
-async function augmentAndAddExamples(dataURL, idx){
-  if(!modelReady) return 0;
-  const img=new Image();
-  await new Promise(r=>{ img.onload=r; img.src=dataURL; });
-  // 'orig' is already added in saveExample; these are the EXTRA variations:
-  const kinds=['flip','rot180','rotL','rotR','flip180','zoom','bright','dark'];
-  let added=0;
-  for(const k of kinds){
-    const cv=drawVariant(img,k);
-    try{
-      const t=tf.browser.fromPixels(cv);
-      const emb=mobilenetModel.infer(t,true);
-      classifier.addExample(emb,idx);
-      t.dispose(); emb.dispose();
-      added++;
-    }catch(e){}
-    await new Promise(r=>setTimeout(r,0)); // yield so the page stays responsive
-  }
-  return added;
-}
-
 async function saveExample(){
   const name=(pendingCapture.name||'').trim();
   if(!name){ return; }
@@ -984,7 +924,7 @@ async function saveExample(){
   let idx=state.labels.indexOf(name);
   if(idx===-1){ state.labels.push(name); idx=state.labels.length-1; }
 
-  // add the ORIGINAL example to classifier
+  // add example to classifier
   const tensor = pendingCapture._embeddingTensor || tf.tensor(pendingCapture.embedding,[1,pendingCapture.embedding.length]);
   classifier.addExample(tensor, idx);
   // (don't dispose embedding tensor we created from infer; KNN copies data)
@@ -993,20 +933,10 @@ async function saveExample(){
   // keep a small thumbnail as the label preview
   state.thumbs[name]=makeThumb(pendingCapture.dataURL, 96);
 
-  const captured = pendingCapture.dataURL;   // keep before modal clears it
-  const labelName = name, labelIdx = idx;
-
   saveToStorage();
   renderGallery();
   closeModal();
-  toast(`🎉 IRIS learned "${labelName}"! Studying it from many angles… 🔄`);
-
-  // AUTO-AUGMENT: turn this single photo into many learning examples
-  const extra = await augmentAndAddExamples(captured, labelIdx);
-  if(extra>0){
-    saveToStorage();
-    toast(`✅ "${labelName}" learned from ${extra+1} views — accurate with fewer photos!`);
-  }
+  toast(`🎉 IRIS learned "${name}"! (${state.counts[name]} picture${state.counts[name]>1?'s':''})`);
 }
 function makeThumb(dataURL,size){
   const c=document.createElement('canvas');c.width=size;c.height=size;
@@ -1042,14 +972,14 @@ function renderGallery(){
   document.getElementById('labelTotal').textContent=total;
   document.getElementById('navCount').textContent=totalPics;
 
-  // training meter: with auto-augmentation, only ~2 photos per thing are needed
-  const goal = Math.max(2,total)*2;
+  // training meter: encourage 2+ labels and ~5 pics each
+  const goal = Math.max(2,total)*5;
   const pct = Math.min(100, Math.round((totalPics/goal)*100));
   document.getElementById('trainFill').style.width=pct+'%';
   const cap=document.getElementById('trainCap');
   if(total===0) cap.textContent='Teach IRIS at least 2 different things to start! 🌱';
   else if(total===1) cap.textContent='Great start! Now teach a different thing too. 🌿';
-  else cap.textContent=`IRIS knows ${total} things — it learns lots from each photo, so just 1–2 photos each is plenty! 🌳 (${pct}%)`;
+  else cap.textContent=`IRIS knows ${total} things from ${totalPics} pictures — keep going to boost accuracy! 🌳 (${pct}%)`;
 
   refreshLiveNote();
 }
@@ -1083,51 +1013,22 @@ async function toggleLiveCamera(){
   const active=state.labels.filter(l=>(state.counts[l]||0)>0);
   if(active.length<2){ toast('Teach IRIS 2+ things first! 🎓'); setMode('train'); return; }
   try{
-    liveStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:liveFacing}}});
+    liveStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
     const v=document.getElementById('liveVideo'); v.srcObject=liveStream;
-    v.style.transform = (liveFacing==='user') ? 'scaleX(-1)' : 'none';
     document.getElementById('liveStage').classList.add('show');
     document.getElementById('liveToggle').textContent='🛑 Close Camera';
-    document.getElementById('liveSwitch').style.display='inline-block';
     document.getElementById('liveGuess').textContent='Show IRIS an object… 🔎';
     setOverlay('🔎','Looking…',null);
     liveLoop();
   }catch(e){ toast('📷 Could not open camera. Allow camera access and try again.'); }
-}
-async function switchLiveCamera(){
-  liveFacing = (liveFacing==='environment') ? 'user' : 'environment';
-  if(!liveStream) return;
-  if(liveLoopId){ cancelAnimationFrame(liveLoopId); liveLoopId=null; }
-  liveStream.getTracks().forEach(t=>t.stop());
-  try{
-    liveStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:liveFacing}}});
-    const v=document.getElementById('liveVideo'); v.srcObject=liveStream;
-    v.style.transform = (liveFacing==='user') ? 'scaleX(-1)' : 'none';
-    toast(liveFacing==='user' ? '🤳 Front camera' : '📷 Rear camera');
-    liveLoop();
-  }catch(e){ toast('📷 Could not switch camera.'); }
 }
 function stopLiveCamera(){
   if(liveLoopId){ cancelAnimationFrame(liveLoopId); liveLoopId=null; }
   if(liveStream){ liveStream.getTracks().forEach(t=>t.stop()); liveStream=null; }
   document.getElementById('liveStage').classList.remove('show');
   const tg=document.getElementById('liveToggle'); if(tg) tg.textContent='🎥 Open Camera';
-  const sw=document.getElementById('liveSwitch'); if(sw) sw.style.display='none';
 }
 let liveBusy=false, lastPredict=0;
-let _rotCanvas=null;
-function getRotCanvas(w,h){
-  if(!_rotCanvas) _rotCanvas=document.createElement('canvas');
-  _rotCanvas.width=w; _rotCanvas.height=h;
-  return _rotCanvas;
-}
-async function predictFromPixels(source){
-  const t=tf.browser.fromPixels(source);
-  const emb=mobilenetModel.infer(t,true);
-  const res=await classifier.predictClass(emb, 5);
-  t.dispose(); emb.dispose();
-  return res;
-}
 async function liveLoop(){
   liveLoopId=requestAnimationFrame(liveLoop);
   const now=performance.now();
@@ -1136,23 +1037,11 @@ async function liveLoop(){
   try{
     const v=document.getElementById('liveVideo');
     if(!v.videoWidth){ liveBusy=false; return; }
-
-    // 1) predict on the normal frame
-    const resNormal=await predictFromPixels(v);
-
-    // 2) predict on a 180°-rotated frame so UPSIDE-DOWN / inverted objects still work
-    const cw=Math.min(v.videoWidth,300), ch=Math.min(v.videoHeight,300);
-    const cv=getRotCanvas(cw,ch); const ctx=cv.getContext('2d');
-    ctx.save();
-    ctx.translate(cw/2,ch/2); ctx.rotate(Math.PI); ctx.translate(-cw/2,-ch/2);
-    ctx.drawImage(v,0,0,cw,ch);
-    ctx.restore();
-    const resFlip=await predictFromPixels(cv);
-
-    // keep whichever orientation IRIS is more confident about
-    const cN=resNormal.confidences[resNormal.label]||0;
-    const cF=resFlip.confidences[resFlip.label]||0;
-    showPrediction(cF>cN ? resFlip : resNormal);
+    const t=tf.browser.fromPixels(v);
+    const emb=mobilenetModel.infer(t,true);
+    const res=await classifier.predictClass(emb, 5);
+    t.dispose(); emb.dispose();
+    showPrediction(res);
   }catch(e){ /* ignore frame */ }
   liveBusy=false;
 }
